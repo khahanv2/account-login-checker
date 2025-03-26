@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Kiểm Tra Tài Khoản</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        info: '#06b6d4'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50" x-data="accountChecker()">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="border-b border-gray-200 pb-6 mb-8">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 flex items-center">
+                        <i class="fas fa-user-check text-primary mr-3"></i>
+                        Hệ Thống Kiểm Tra Tài Khoản
+                    </h1>
+                </div>
+                <p class="text-gray-500 mt-2 md:mt-0">Xử lý và theo dõi tài khoản theo thời gian thực</p>
+            </div>
+        </header>
+
+        <!-- Upload Section -->
+        <section class="mb-8">
+            <div 
+                class="bg-white rounded-lg border-2 border-dashed border-gray-300 p-8 text-center transition-all hover:border-primary"
+                :class="{ 'border-primary bg-blue-50': isDragging }"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="handleFileDrop"
+            >
+                <div class="text-5xl text-gray-300 mb-4">
+                    <i class="fas fa-file-excel"></i>
+                </div>
+                <h3 class="text-xl font-medium mb-2">Tải lên file Excel chứa danh sách tài khoản</h3>
+                <p class="text-gray-500 mb-6">Kéo và thả file vào đây hoặc nhấn nút bên dưới để chọn file</p>
+                <input type="file" id="file-input" accept=".xlsx, .xls" class="hidden" @change="handleFileSelect">
+                <button @click="document.getElementById('file-input').click()" class="bg-primary text-white font-medium py-2 px-6 rounded-md hover:bg-blue-600 transition-colors">
+                    <i class="fas fa-folder-open mr-2"></i> Chọn File
+                </button>
+
+                <!-- Selected File Info -->
+                <div x-show="selectedFile" class="mt-4 flex justify-center items-center">
+                    <div class="bg-blue-50 rounded-md p-3 flex items-center max-w-md">
+                        <i class="fas fa-file-excel text-success mr-3"></i>
+                        <span class="text-gray-700" x-text="selectedFile?.name"></span>
+                        <button @click="removeFile" class="ml-3 text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Start Process Button -->
+                <button 
+                    x-show="selectedFile" 
+                    @click="startProcessing"
+                    class="mt-4 bg-success text-white font-medium py-2 px-6 rounded-md hover:bg-green-600 transition-colors"
+                    :disabled="processing"
+                    :class="{ 'opacity-50 cursor-not-allowed': processing }"
+                >
+                    <i class="fas fa-play mr-2"></i> Bắt đầu Xử lý
+                </button>
+            </div>
+        </section>
+
+        <!-- Progress Section -->
+        <section class="mb-8" x-show="processing || processedAccounts > 0">
+            <!-- Progress Bar -->
+            <div class="h-6 bg-gray-200 rounded-full overflow-hidden mb-6">
+                <div 
+                    class="h-full bg-primary text-xs text-white font-semibold flex items-center justify-center transition-all duration-500 ease-out"
+                    :style="`width: ${percentComplete}%`"
+                    x-text="percentComplete.toFixed(1) + '%'"
+                ></div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- Total Accounts -->
+                <div class="bg-white rounded-lg shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-1">
+                    <div class="flex justify-center mb-3">
+                        <div class="bg-blue-100 text-primary rounded-full p-3">
+                            <i class="fas fa-users text-2xl"></i>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-sm font-medium uppercase text-center mb-1">Tổng Tài Khoản</h3>
+                    <p class="text-3xl font-bold text-center" x-text="totalAccounts"></p>
+                </div>
+
+                <!-- Success Accounts -->
+                <div class="bg-white rounded-lg shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-1">
+                    <div class="flex justify-center mb-3">
+                        <div class="bg-green-100 text-success rounded-full p-3">
+                            <i class="fas fa-user-check text-2xl"></i>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-sm font-medium uppercase text-center mb-1">Tài Khoản Đúng</h3>
+                    <p class="text-3xl font-bold text-success text-center" x-text="successAccounts"></p>
+                </div>
+
+                <!-- Failed Accounts -->
+                <div class="bg-white rounded-lg shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-1">
+                    <div class="flex justify-center mb-3">
+                        <div class="bg-red-100 text-danger rounded-full p-3">
+                            <i class="fas fa-user-times text-2xl"></i>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-sm font-medium uppercase text-center mb-1">Tài Khoản Sai</h3>
+                    <p class="text-3xl font-bold text-danger text-center" x-text="failedAccounts"></p>
+                </div>
+
+                <!-- Processing Time -->
+                <div class="bg-white rounded-lg shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-1">
+                    <div class="flex justify-center mb-3">
+                        <div class="bg-amber-100 text-warning rounded-full p-3">
+                            <i class="fas fa-clock text-2xl"></i>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-sm font-medium uppercase text-center mb-1">Thời Gian</h3>
+                    <p class="text-3xl font-bold text-warning text-center" x-text="formatTime(processingTime)"></p>
+                </div>
+
+                <!-- Total Cost -->
+                <div class="bg-white rounded-lg shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-1">
+                    <div class="flex justify-center mb-3">
+                        <div class="bg-cyan-100 text-info rounded-full p-3">
+                            <i class="fas fa-coins text-2xl"></i>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-sm font-medium uppercase text-center mb-1">Tổng Chi Phí</h3>
+                    <p class="text-3xl font-bold text-info text-center" x-text="formatCurrency(totalAccounts * 200)"></p>
+                    <p class="text-xs text-gray-500 text-center">200đ/Tài khoản</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Account Table Section -->
+        <section class="mb-8" x-show="accounts.length > 0 || processing">
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-medium text-gray-900 flex items-center">
+                        <i class="fas fa-list-ul text-primary mr-2"></i>
+                        Chi Tiết Xử Lý Tài Khoản
+                    </h2>
+                    <div class="text-sm">
+                        <span class="bg-primary text-white px-2 py-1 rounded-md" x-text="processedAccounts"></span>
+                        <span class="text-gray-500 mx-1">/</span>
+                        <span class="bg-gray-500 text-white px-2 py-1 rounded-md" x-text="totalAccounts"></span>
+                        <span class="text-gray-500 ml-2">tài khoản đã xử lý</span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <div class="max-h-96 overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        #
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Tài Khoản
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Trạng Thái
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Số Dư
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Giao Dịch Gần Nhất
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Thời Gian
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="account-table-body">
+                                <template x-if="accounts.length === 0 && processing">
+                                    <tr>
+                                        <td colspan="6" class="px-6 py-16 text-center text-gray-500">
+                                            <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                            <p>Đang chờ xử lý tài khoản...</p>
+                                        </td>
+                                    </tr>
+                                </template>
+                                
+                                <template x-for="(account, index) in accounts" :key="account.username">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="index + 1"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="account.username"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <template x-if="account.status === 'processing'">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                                                    <span x-text="account.step || 'Đang xử lý'"></span>
+                                                </span>
+                                            </template>
+                                            <template x-if="account.status === 'success'">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    <i class="fas fa-check mr-1"></i> 
+                                                    Thành công
+                                                </span>
+                                            </template>
+                                            <template x-if="account.status === 'failed'">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                    <i class="fas fa-times mr-1"></i>
+                                                    <span x-text="account.errorCode || 'Thất bại'"></span>
+                                                </span>
+                                            </template>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="account.balance ? formatCurrency(account.balance) : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <template x-if="account.lastDeposit">
+                                                <div>
+                                                    <div class="font-medium" x-text="formatCurrency(account.lastDeposit)"></div>
+                                                    <div class="text-xs text-gray-400" x-text="account.depositTime"></div>
+                                                </div>
+                                            </template>
+                                            <template x-if="!account.lastDeposit && account.status === 'success'">
+                                                <span>Không có</span>
+                                            </template>
+                                            <template x-if="!account.lastDeposit && account.status !== 'success'">
+                                                <span>-</span>
+                                            </template>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="account.processingTime || '0s'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Download Section -->
+        <section class="mb-8" x-show="processedAccounts > 0 && !processing">
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-medium text-gray-900 flex items-center">
+                        <i class="fas fa-download text-primary mr-2"></i>
+                        Tải Xuống Kết Quả
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Success Results -->
+                        <div class="bg-white border rounded-lg overflow-hidden">
+                            <div class="p-4 flex items-center">
+                                <div class="mr-4 bg-green-100 text-success rounded-full p-3 flex-shrink-0">
+                                    <i class="fas fa-file-excel text-2xl"></i>
+                                </div>
+                                <div class="flex-grow">
+                                    <h3 class="text-base font-medium mb-1">Tài khoản đúng</h3>
+                                    <p class="text-sm text-gray-500 mb-3" x-text="successFile || 'Chưa có file kết quả'"></p>
+                                    <button 
+                                        @click="downloadFile('success')"
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-success hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                        :disabled="!successFile"
+                                        :class="{ 'opacity-50 cursor-not-allowed': !successFile }"
+                                    >
+                                        <i class="fas fa-download mr-1.5"></i> Tải xuống
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Failed Results -->
+                        <div class="bg-white border rounded-lg overflow-hidden">
+                            <div class="p-4 flex items-center">
+                                <div class="mr-4 bg-red-100 text-danger rounded-full p-3 flex-shrink-0">
+                                    <i class="fas fa-file-excel text-2xl"></i>
+                                </div>
+                                <div class="flex-grow">
+                                    <h3 class="text-base font-medium mb-1">Tài khoản sai</h3>
+                                    <p class="text-sm text-gray-500 mb-3" x-text="failFile || 'Chưa có file kết quả'"></p>
+                                    <button 
+                                        @click="downloadFile('fail')"
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-danger hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                        :disabled="!failFile"
+                                        :class="{ 'opacity-50 cursor-not-allowed': !failFile }"
+                                    >
+                                        <i class="fas fa-download mr-1.5"></i> Tải xuống
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Alerts Container -->
+        <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md" id="alerts-container"></div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
